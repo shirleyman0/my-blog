@@ -1,0 +1,649 @@
+# 个人博客系统概要设计文档
+
+## 1. 文档说明
+
+### 1.1 文档目的
+本文档描述个人博客系统的整体架构设计、模块划分、接口设计和数据流程，为后续详细设计和开发提供指导。
+
+### 1.2 参考文档
+- [需求分析文档](./requirements.md)
+
+---
+
+## 2. 系统架构
+
+### 2.1 整体架构图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         客户端 (Browser)                         │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      CDN / Edge Network                          │
+│                         (Vercel Edge)                            │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Next.js 应用层                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   前台页面   │  │   后台页面   │  │      API Routes        │  │
+│  │  (SSG/SSR)  │  │    (CSR)    │  │   (Server Actions)     │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    共享组件层                                ││
+│  │  UI Components │ Hooks │ Utils │ Types                      ││
+│  └─────────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    数据访问层                                ││
+│  │              Supabase Client (supabase-js)                  ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Supabase 后端服务                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │  PostgreSQL │  │    Auth     │  │       Storage           │  │
+│  │   Database  │  │   Service   │  │       (可选)            │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 架构说明
+
+| 层级 | 技术 | 职责 |
+|------|------|------|
+| 客户端 | Browser | 用户交互、页面渲染 |
+| CDN | Vercel Edge | 静态资源缓存、边缘计算 |
+| 应用层 | Next.js 16 | 页面路由、服务端渲染、API 处理 |
+| 数据访问层 | supabase-js | 数据库操作封装 |
+| 后端服务 | Supabase | 数据存储、用户认证 |
+
+### 2.3 渲染策略
+
+| 页面类型 | 渲染方式 | 说明 |
+|----------|----------|------|
+| 首页 | SSG | 静态生成，构建时生成 |
+| 文章列表 | SSR | 服务端渲染，支持分页和筛选 |
+| 文章详情 | SSG + ISR | 静态生成 + 增量静态再生 |
+| 后台页面 | CSR | 客户端渲染，需要认证 |
+
+---
+
+## 3. 目录结构设计
+
+```
+src/
+├── app/                          # Next.js App Router
+│   ├── layout.tsx                # 根布局
+│   ├── page.tsx                  # 首页
+│   ├── globals.css               # 全局样式
+│   │
+│   ├── blog/                     # 博客模块
+│   │   ├── page.tsx              # 文章列表页
+│   │   └── [slug]/
+│   │       └── page.tsx          # 文章详情页
+│   │
+│   ├── about/                    # 关于页面（待开发）
+│   │   └── page.tsx
+│   │
+│   ├── tags/                     # 标签模块（待开发）
+│   │   ├── page.tsx              # 标签列表
+│   │   └── [tag]/
+│   │       └── page.tsx          # 标签文章列表
+│   │
+│   ├── archives/                 # 归档页面（待开发）
+│   │   └── page.tsx
+│   │
+│   └── admin/                    # 后台管理（待开发）
+│       ├── layout.tsx            # 后台布局（含认证检查）
+│       ├── page.tsx              # 后台首页/仪表盘
+│       ├── login/
+│       │   └── page.tsx          # 登录页
+│       └── posts/
+│           ├── page.tsx          # 文章管理列表
+│           ├── new/
+│           │   └── page.tsx      # 新建文章
+│           └── [id]/
+│               └── page.tsx      # 编辑文章
+│
+├── components/                   # 共享组件
+│   ├── ui/                       # 基础 UI 组件
+│   │   ├── Button.tsx
+│   │   ├── Input.tsx
+│   │   ├── Card.tsx
+│   │   └── ...
+│   │
+│   ├── layout/                   # 布局组件
+│   │   ├── Header.tsx
+│   │   ├── Footer.tsx
+│   │   ├── Sidebar.tsx
+│   │   └── Navigation.tsx
+│   │
+│   ├── blog/                     # 博客相关组件
+│   │   ├── PostCard.tsx          # 文章卡片
+│   │   ├── PostList.tsx          # 文章列表
+│   │   ├── PostContent.tsx       # 文章内容
+│   │   ├── TagList.tsx           # 标签列表
+│   │   ├── TableOfContents.tsx   # 目录导航
+│   │   └── Pagination.tsx        # 分页组件
+│   │
+│   └── admin/                    # 后台组件（待开发）
+│       ├── PostEditor.tsx        # 文章编辑器
+│       └── PostTable.tsx         # 文章管理表格
+│
+├── lib/                          # 工具库
+│   ├── supabase.ts               # Supabase 客户端
+│   ├── utils.ts                  # 通用工具函数
+│   └── constants.ts              # 常量定义
+│
+├── hooks/                        # 自定义 Hooks（待开发）
+│   ├── useAuth.ts                # 认证 Hook
+│   └── usePagination.ts          # 分页 Hook
+│
+├── types/                        # TypeScript 类型定义
+│   ├── blog.ts                   # 博客相关类型
+│   └── database.ts               # 数据库类型
+│
+└── services/                     # 数据服务层（待开发）
+    ├── posts.ts                  # 文章数据服务
+    ├── tags.ts                   # 标签数据服务
+    └── auth.ts                   # 认证服务
+```
+
+---
+
+## 4. 模块设计
+
+### 4.1 模块划分
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                        博客系统                             │
+├────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
+│  │   前台模块    │  │   后台模块    │  │     公共模块     │  │
+│  ├──────────────┤  ├──────────────┤  ├──────────────────┤  │
+│  │ • 首页       │  │ • 登录认证   │  │ • UI 组件库     │  │
+│  │ • 文章列表   │  │ • 文章管理   │  │ • 布局组件      │  │
+│  │ • 文章详情   │  │ • 仪表盘     │  │ • 工具函数      │  │
+│  │ • 标签页     │  │              │  │ • 类型定义      │  │
+│  │ • 归档页     │  │              │  │ • 数据服务      │  │
+│  │ • 关于页     │  │              │  │                 │  │
+│  └──────────────┘  └──────────────┘  └──────────────────┘  │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 前台模块
+
+#### 4.2.1 首页模块
+- **职责**：展示博客品牌、特色板块、最新文章推荐
+- **组件**：Hero、FeatureSection、RecentPosts
+- **数据**：最新 N 篇已发布文章
+
+#### 4.2.2 文章列表模块
+- **职责**：展示文章列表，支持分页和标签筛选
+- **组件**：PostList、PostCard、Pagination、TagFilter
+- **数据**：分页文章列表、标签列表
+
+#### 4.2.3 文章详情模块
+- **职责**：展示文章完整内容
+- **组件**：PostContent、TableOfContents、PostNavigation
+- **数据**：单篇文章详情、上下篇文章信息
+
+#### 4.2.4 标签模块
+- **职责**：展示标签云和按标签筛选的文章
+- **组件**：TagCloud、TagPostList
+- **数据**：标签列表及文章数量
+
+#### 4.2.5 归档模块
+- **职责**：按时间归档展示文章
+- **组件**：ArchiveList、YearGroup
+- **数据**：按年月分组的文章列表
+
+### 4.3 后台模块
+
+#### 4.3.1 认证模块
+- **职责**：管理员登录、登出、会话管理
+- **组件**：LoginForm、AuthProvider
+- **数据**：用户会话信息
+
+#### 4.3.2 文章管理模块
+- **职责**：文章的增删改查
+- **组件**：PostTable、PostEditor、PostForm
+- **数据**：全部文章（含草稿）
+
+---
+
+## 5. 数据服务设计
+
+### 5.1 服务接口定义
+
+```typescript
+// services/posts.ts
+
+interface PostService {
+  // 查询
+  getPublishedPosts(options?: {
+    page?: number;
+    pageSize?: number;
+    tag?: string;
+  }): Promise<{ posts: BlogPost[]; total: number }>;
+
+  getPostBySlug(slug: string): Promise<BlogPost | null>;
+
+  getRecentPosts(limit: number): Promise<BlogPost[]>;
+
+  getAdjacentPosts(currentId: string): Promise<{
+    prev: BlogPost | null;
+    next: BlogPost | null;
+  }>;
+
+  // 管理（需认证）
+  getAllPosts(): Promise<BlogPost[]>;
+
+  createPost(data: CreatePostInput): Promise<BlogPost>;
+
+  updatePost(id: string, data: UpdatePostInput): Promise<BlogPost>;
+
+  deletePost(id: string): Promise<void>;
+
+  publishPost(id: string): Promise<BlogPost>;
+
+  unpublishPost(id: string): Promise<BlogPost>;
+}
+
+// services/tags.ts
+
+interface TagService {
+  getAllTags(): Promise<{ tag: string; count: number }[]>;
+
+  getPostsByTag(tag: string, options?: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ posts: BlogPost[]; total: number }>;
+}
+
+// services/auth.ts
+
+interface AuthService {
+  signIn(email: string, password: string): Promise<User>;
+
+  signOut(): Promise<void>;
+
+  getSession(): Promise<Session | null>;
+
+  onAuthStateChange(callback: (session: Session | null) => void): () => void;
+}
+```
+
+### 5.2 数据查询示例
+
+```typescript
+// 获取已发布文章列表（分页）
+const { data, error } = await supabase
+  .from('blog_posts')
+  .select('*', { count: 'exact' })
+  .not('published_at', 'is', null)
+  .order('published_at', { ascending: false })
+  .range(offset, offset + pageSize - 1);
+
+// 按标签筛选
+const { data, error } = await supabase
+  .from('blog_posts')
+  .select('*')
+  .not('published_at', 'is', null)
+  .contains('tags', [tag])
+  .order('published_at', { ascending: false });
+
+// 获取所有标签及文章数量
+const { data, error } = await supabase
+  .from('blog_posts')
+  .select('tags')
+  .not('published_at', 'is', null);
+// 然后在应用层聚合统计
+```
+
+---
+
+## 6. 组件设计
+
+### 6.1 组件层次结构
+
+```
+App
+├── RootLayout
+│   ├── Header
+│   │   ├── Logo
+│   │   └── Navigation
+│   ├── Main (页面内容)
+│   └── Footer
+│
+├── HomePage
+│   ├── Hero
+│   ├── FeatureSection
+│   └── RecentPosts
+│       └── PostCard[]
+│
+├── BlogListPage
+│   ├── PageHeader
+│   ├── TagFilter
+│   ├── PostList
+│   │   └── PostCard[]
+│   └── Pagination
+│
+├── BlogPostPage
+│   ├── PostHeader
+│   ├── TableOfContents
+│   ├── PostContent (Markdown)
+│   ├── TagList
+│   └── PostNavigation
+│
+└── AdminLayout
+    ├── AdminSidebar
+    ├── AdminHeader
+    └── AdminContent
+        ├── PostTable
+        └── PostEditor
+```
+
+### 6.2 核心组件规格
+
+#### PostCard
+```typescript
+interface PostCardProps {
+  post: BlogPost;
+  variant?: 'default' | 'compact' | 'featured';
+}
+```
+
+#### Pagination
+```typescript
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}
+```
+
+#### PostContent
+```typescript
+interface PostContentProps {
+  content: string;  // Markdown 内容
+  className?: string;
+}
+```
+
+#### TableOfContents
+```typescript
+interface TOCItem {
+  id: string;
+  text: string;
+  level: number;
+}
+
+interface TableOfContentsProps {
+  items: TOCItem[];
+  activeId?: string;
+}
+```
+
+---
+
+## 7. 页面数据流
+
+### 7.1 文章列表页数据流
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Browser   │────▶│  Next.js    │────▶│  Supabase   │
+│  (Request)  │     │  (Server)   │     │  (Database) │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │                   │
+                           │◀──────────────────┘
+                           │    posts data
+                           ▼
+                    ┌─────────────┐
+                    │   Render    │
+                    │  PostList   │
+                    └─────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │   Browser   │
+                    │   (HTML)    │
+                    └─────────────┘
+```
+
+### 7.2 后台文章编辑数据流
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Browser   │────▶│  Next.js    │────▶│  Supabase   │
+│  (Editor)   │     │  (Action)   │     │   (Auth)    │
+└─────────────┘     └─────────────┘     └─────────────┘
+      │                    │                   │
+      │                    │◀──────────────────┘
+      │                    │   verify session
+      │                    ▼
+      │             ┌─────────────┐
+      │             │  Supabase   │
+      │             │  (Database) │
+      │             └─────────────┘
+      │                    │
+      │◀───────────────────┘
+      │      result
+      ▼
+┌─────────────┐
+│   Update    │
+│     UI      │
+└─────────────┘
+```
+
+---
+
+## 8. 安全设计
+
+### 8.1 认证流程
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│  Login   │───▶│ Supabase │───▶│  Return  │
+│   Form   │    │   Auth   │    │  Session │
+└──────────┘    └──────────┘    └──────────┘
+                                      │
+                                      ▼
+                               ┌──────────┐
+                               │  Store   │
+                               │  Cookie  │
+                               └──────────┘
+                                      │
+                                      ▼
+                               ┌──────────┐
+                               │  Access  │
+                               │  Admin   │
+                               └──────────┘
+```
+
+### 8.2 权限控制
+
+| 资源 | 未认证用户 | 认证用户 |
+|------|-----------|---------|
+| 已发布文章（读） | ✅ | ✅ |
+| 草稿文章（读） | ❌ | ✅ |
+| 文章（写） | ❌ | ✅ |
+| 后台页面 | ❌ | ✅ |
+
+### 8.3 安全措施
+
+1. **RLS 策略**：数据库层面的行级安全控制
+2. **服务端验证**：所有写操作在服务端验证会话
+3. **XSS 防护**：使用 react-markdown 安全渲染
+4. **CSRF 防护**：Next.js 内置 CSRF 保护
+5. **环境变量**：敏感配置不暴露到客户端
+
+---
+
+## 9. SEO 设计
+
+### 9.1 元数据配置
+
+```typescript
+// app/layout.tsx
+export const metadata: Metadata = {
+  title: {
+    default: '我的博客',
+    template: '%s | 我的博客',
+  },
+  description: '分享技术、思考和生活',
+  openGraph: {
+    type: 'website',
+    locale: 'zh_CN',
+    siteName: '我的博客',
+  },
+};
+
+// app/blog/[slug]/page.tsx
+export async function generateMetadata({ params }): Promise<Metadata> {
+  const post = await getPostBySlug(params.slug);
+  return {
+    title: post.title,
+    description: post.excerpt,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      type: 'article',
+      publishedTime: post.published_at,
+      authors: [post.author],
+      tags: post.tags,
+    },
+  };
+}
+```
+
+### 9.2 Sitemap 生成
+
+```typescript
+// app/sitemap.ts
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const posts = await getPublishedPosts();
+
+  const postUrls = posts.map((post) => ({
+    url: `https://example.com/blog/${post.slug}`,
+    lastModified: post.updated_at,
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  }));
+
+  return [
+    { url: 'https://example.com', priority: 1.0 },
+    { url: 'https://example.com/blog', priority: 0.9 },
+    ...postUrls,
+  ];
+}
+```
+
+---
+
+## 10. 性能优化策略
+
+### 10.1 渲染优化
+
+| 策略 | 应用场景 |
+|------|----------|
+| SSG | 首页、文章详情页 |
+| ISR | 文章详情页（revalidate: 3600） |
+| SSR | 文章列表页（支持动态筛选） |
+| 流式渲染 | 长内容页面 |
+
+### 10.2 资源优化
+
+- **图片优化**：使用 next/image 自动优化
+- **字体优化**：使用 next/font 本地加载
+- **代码分割**：动态导入非关键组件
+- **缓存策略**：合理设置 Cache-Control
+
+### 10.3 数据库优化
+
+- **索引**：slug、published_at 字段索引
+- **分页**：避免一次加载全部数据
+- **选择性查询**：只查询需要的字段
+
+---
+
+## 11. 部署架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Vercel                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Edge      │  │  Serverless │  │    Static Assets    │  │
+│  │  Functions  │  │  Functions  │  │       (CDN)         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       Supabase                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │  PostgreSQL │  │    Auth     │  │      Storage        │  │
+│  │  (Database) │  │  (GoTrue)   │  │    (S3-like)        │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 12. 附录
+
+### 12.1 类型定义
+
+```typescript
+// types/blog.ts
+
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  content: string;
+  excerpt: string;
+  author: string;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  tags: string[];
+}
+
+export interface CreatePostInput {
+  title: string;
+  slug: string;
+  content: string;
+  excerpt?: string;
+  author?: string;
+  tags?: string[];
+}
+
+export interface UpdatePostInput {
+  title?: string;
+  slug?: string;
+  content?: string;
+  excerpt?: string;
+  tags?: string[];
+}
+
+export interface PaginationParams {
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+```
