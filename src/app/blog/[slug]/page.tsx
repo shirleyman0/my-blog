@@ -2,12 +2,45 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import { supabase } from '@/lib/supabase';
+import type { Metadata } from 'next';
+import 'highlight.js/styles/github-dark.css';
 
 interface BlogPostPageProps {
   params: Promise<{
     slug: string;
   }>;
+}
+
+export async function generateMetadata({ params }: BlogPostPageProps): Promise<Metadata> {
+  const { slug } = await params;
+
+  const { data: post } = await supabase
+    .from('blog_posts')
+    .select('title, excerpt, author, published_at, tags')
+    .eq('slug', slug)
+    .not('published_at', 'is', null)
+    .single();
+
+  if (!post) {
+    return {
+      title: '文章未找到',
+    };
+  }
+
+  return {
+    title: post.title,
+    description: post.excerpt || `${post.title} - 由 ${post.author} 撰写`,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt || `${post.title} - 由 ${post.author} 撰写`,
+      type: 'article',
+      publishedTime: post.published_at,
+      authors: [post.author],
+      tags: post.tags,
+    },
+  };
 }
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
@@ -70,8 +103,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
         {/* Article Content */}
         <div className="prose prose-lg dark:prose-invert max-w-none bg-white dark:bg-gray-800 rounded-lg p-8 shadow-md">
-          {/* TODO(human) - Add custom styling for the markdown content */}
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
             {post.content}
           </ReactMarkdown>
         </div>

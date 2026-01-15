@@ -1,15 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase client configuration
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase environment variables are not set. Please configure them in your .env.local file or deployment environment.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+);
 
 // Database types
 export interface BlogPost {
