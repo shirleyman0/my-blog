@@ -36,3 +36,6 @@ npm run lint     # 运行 ESLint 检查
 
 ### 数据库 Schema
 `blog_posts` 表结构定义在 `supabase-schema.sql`，包含 RLS 策略（公开读取，认证用户写入）。
+
+### 注意事项
+- 项目使用pnpm包管理工具

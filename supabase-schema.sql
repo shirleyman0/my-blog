@@ -33,6 +33,12 @@ CREATE POLICY "Allow authenticated insert" ON blog_posts
 CREATE POLICY "Allow authenticated update" ON blog_posts
     FOR UPDATE USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow authenticated delete" ON blog_posts
+    FOR DELETE USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated read all" ON blog_posts
+    FOR SELECT TO authenticated USING (true);
+
 -- Insert some sample data
 INSERT INTO blog_posts (title, slug, content, excerpt, author, published_at, tags)
 VALUES
