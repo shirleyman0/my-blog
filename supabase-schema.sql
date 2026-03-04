@@ -35,6 +35,10 @@ DROP POLICY IF EXISTS "Allow authenticated insert" ON blog_posts;
 DROP POLICY IF EXISTS "Allow authenticated update" ON blog_posts;
 DROP POLICY IF EXISTS "Allow authenticated delete" ON blog_posts;
 DROP POLICY IF EXISTS "Allow authenticated read all" ON blog_posts;
+DROP POLICY IF EXISTS "Allow admin read all" ON blog_posts;
+DROP POLICY IF EXISTS "Allow admin insert" ON blog_posts;
+DROP POLICY IF EXISTS "Allow admin update" ON blog_posts;
+DROP POLICY IF EXISTS "Allow admin delete" ON blog_posts;
 
 DROP POLICY IF EXISTS "Admin users can read own row" ON admin_users;
 
@@ -94,6 +98,75 @@ CREATE POLICY "Allow admin delete" ON blog_posts
         WHERE admin_users.user_id = auth.uid()
       )
     );
+
+-- Storage bucket for post images
+-- NOTE:
+-- In some environments, the executing role is not the owner of storage tables.
+-- We avoid direct ALTER TABLE on storage.objects and gracefully skip policy setup
+-- if privilege is insufficient.
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('blog-images', 'blog-images', true)
+    ON CONFLICT (id) DO UPDATE
+    SET public = EXCLUDED.public;
+
+    DROP POLICY IF EXISTS "Public read blog images" ON storage.objects;
+    DROP POLICY IF EXISTS "Admin upload blog images" ON storage.objects;
+    DROP POLICY IF EXISTS "Admin update blog images" ON storage.objects;
+    DROP POLICY IF EXISTS "Admin delete blog images" ON storage.objects;
+
+    CREATE POLICY "Public read blog images" ON storage.objects
+        FOR SELECT
+        USING (bucket_id = 'blog-images');
+
+    CREATE POLICY "Admin upload blog images" ON storage.objects
+        FOR INSERT TO authenticated
+        WITH CHECK (
+          bucket_id = 'blog-images'
+          AND EXISTS (
+            SELECT 1
+            FROM public.admin_users
+            WHERE admin_users.user_id = auth.uid()
+          )
+        );
+
+    CREATE POLICY "Admin update blog images" ON storage.objects
+        FOR UPDATE TO authenticated
+        USING (
+          bucket_id = 'blog-images'
+          AND EXISTS (
+            SELECT 1
+            FROM public.admin_users
+            WHERE admin_users.user_id = auth.uid()
+          )
+        )
+        WITH CHECK (
+          bucket_id = 'blog-images'
+          AND EXISTS (
+            SELECT 1
+            FROM public.admin_users
+            WHERE admin_users.user_id = auth.uid()
+          )
+        );
+
+    CREATE POLICY "Admin delete blog images" ON storage.objects
+        FOR DELETE TO authenticated
+        USING (
+          bucket_id = 'blog-images'
+          AND EXISTS (
+            SELECT 1
+            FROM public.admin_users
+            WHERE admin_users.user_id = auth.uid()
+          )
+        );
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skip storage bucket/policy setup: insufficient privilege on storage schema. Configure blog-images policies in Supabase Dashboard if needed.';
+  END;
+END
+$$;
 
 -- Insert sample posts
 INSERT INTO blog_posts (title, slug, content, excerpt, author, published_at, tags)

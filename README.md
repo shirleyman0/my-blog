@@ -31,7 +31,7 @@ NEXT_PUBLIC_SITE_URL=https://your-domain.com
 
 ## 数据库初始化
 
-1. 在 Supabase SQL Editor 执行 `supabase-schema.sql`
+1. 在 Supabase SQL Editor 执行 `supabase-schema.sql`（会创建数据表、RLS 策略，以及 `blog-images` 图片存储 bucket）
 2. 在 Supabase Auth 中创建管理员账号（邮箱/密码）
 3. 将该账号加入 `admin_users`：
 
@@ -42,6 +42,13 @@ ON CONFLICT (user_id) DO NOTHING;
 ```
 
 可选：执行 `insert-sample-posts.sql` 插入演示数据。
+
+## 后台编辑器图片上传
+
+- 支持点击“插入图片”按钮选择本地图片
+- 支持在编辑区直接粘贴截图（剪贴板图片）
+- 上传前会在浏览器端压缩图片，随后上传到 Supabase Storage 的 `blog-images` bucket
+- 上传成功后会自动在 Markdown 内容中插入图片语法
 
 ## 常用命令
 
