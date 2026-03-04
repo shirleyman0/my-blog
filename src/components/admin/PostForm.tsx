@@ -3,9 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import MarkdownEditor from '@/components/editor/MarkdownEditor'
 import type { BlogPost } from '@/lib/supabase'
+import {
+  createPostAction,
+  deletePostAction,
+  updatePostAction,
+} from '@/app/admin/posts/actions'
 
 interface PostFormProps {
   post?: BlogPost
@@ -52,43 +56,33 @@ export default function PostForm({ post }: PostFormProps) {
     setError(null)
     setLoading(true)
 
-    const supabase = createBrowserSupabaseClient()
     const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean)
     const finalSlug = slug || generateSlug(title)
-
-    const postData = {
+    const payload = {
       title: title.trim(),
       slug: finalSlug,
       content: content.trim(),
-      excerpt: excerpt.trim() || null,
+      excerpt: excerpt.trim() || undefined,
       tags,
-      published_at: isDraft ? null : (post?.published_at || new Date().toISOString()),
-      updated_at: new Date().toISOString(),
+      publish: !isDraft,
     }
 
-    let result
-    if (isEditing) {
-      result = await supabase
-        .from('blog_posts')
-        .update(postData)
-        .eq('id', post.id)
-    } else {
-      result = await supabase
-        .from('blog_posts')
-        .insert({
-          ...postData,
-          author: 'Admin',
-        })
-    }
+    try {
+      if (isEditing) {
+        await updatePostAction(post.id, payload)
+      } else {
+        await createPostAction(payload)
+      }
 
-    if (result.error) {
-      setError(result.error.message)
+      router.push('/admin/posts')
+      router.refresh()
+    } catch (submitError) {
+      const message =
+        submitError instanceof Error ? submitError.message : '提交失败，请稍后重试'
+      setError(message)
       setLoading(false)
       return
     }
-
-    router.push('/admin/posts')
-    router.refresh()
   }
 
   const handleDelete = async () => {
@@ -97,20 +91,18 @@ export default function PostForm({ post }: PostFormProps) {
     }
 
     setLoading(true)
-    const supabase = createBrowserSupabaseClient()
-    const { error } = await supabase
-      .from('blog_posts')
-      .delete()
-      .eq('id', post.id)
 
-    if (error) {
-      setError(error.message)
+    try {
+      await deletePostAction(post.id)
+      router.push('/admin/posts')
+      router.refresh()
+    } catch (deleteError) {
+      const message =
+        deleteError instanceof Error ? deleteError.message : '删除失败，请稍后重试'
+      setError(message)
       setLoading(false)
       return
     }
-
-    router.push('/admin/posts')
-    router.refresh()
   }
 
   return (

@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import type { Metadata } from 'next';
 import 'highlight.js/styles/github-dark.css';
 
+export const revalidate = 60;
+
 interface BlogPostPageProps {
   params: Promise<{
     slug: string;
@@ -32,13 +34,23 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   return {
     title: post.title,
     description: post.excerpt || `${post.title} - 由 ${post.author} 撰写`,
+    alternates: {
+      canonical: `/blog/${slug}`,
+    },
     openGraph: {
       title: post.title,
       description: post.excerpt || `${post.title} - 由 ${post.author} 撰写`,
       type: 'article',
+      url: `/blog/${slug}`,
       publishedTime: post.published_at,
       authors: [post.author],
       tags: post.tags,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: post.excerpt || `${post.title} - 由 ${post.author} 撰写`,
+      images: ['/opengraph-image'],
     },
   };
 }
@@ -57,6 +69,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   if (error || !post) {
     notFound();
   }
+
+  const publishedDate = post.published_at || post.created_at;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -78,8 +92,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400 mb-6">
             <span>{post.author}</span>
             <span>•</span>
-            <time dateTime={post.published_at}>
-              {new Date(post.published_at).toLocaleDateString('zh-CN', {
+            <time dateTime={publishedDate}>
+              {new Date(publishedDate).toLocaleDateString('zh-CN', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'

@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# My Blog
 
-## Getting Started
+基于 Next.js App Router + Supabase 的个人博客系统，包含前台阅读和后台文章管理。
 
-First, run the development server:
+## 技术栈
+
+- Next.js 16
+- React 19
+- TypeScript
+- Supabase (PostgreSQL + Auth + RLS)
+- Tailwind CSS 4
+
+## 本地开发
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认地址：`http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 环境变量
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+创建 `.env.local` 并配置：
 
-## Learn More
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 数据库初始化
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. 在 Supabase SQL Editor 执行 `supabase-schema.sql`
+2. 在 Supabase Auth 中创建管理员账号（邮箱/密码）
+3. 将该账号加入 `admin_users`：
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```sql
+INSERT INTO admin_users (user_id)
+VALUES ((SELECT id FROM auth.users WHERE email = 'your-admin-email@example.com'))
+ON CONFLICT (user_id) DO NOTHING;
+```
 
-## Deploy on Vercel
+可选：执行 `insert-sample-posts.sql` 插入演示数据。
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 常用命令
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm dev
+pnpm lint
+pnpm build
+pnpm start
+```
+
+## 部署
+
+项目默认按 `pnpm` 在 Vercel 构建（见 `vercel.json`）。

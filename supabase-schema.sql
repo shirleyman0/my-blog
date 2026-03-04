@@ -1,3 +1,6 @@
+-- Enable extension for UUID generation
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Create the blog_posts table
 CREATE TABLE IF NOT EXISTS blog_posts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -12,34 +15,87 @@ CREATE TABLE IF NOT EXISTS blog_posts (
     tags TEXT[] DEFAULT '{}'
 );
 
--- Create an index on slug for faster lookups
-CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
+-- Create an admin user mapping table
+CREATE TABLE IF NOT EXISTS admin_users (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Create an index on published_at for sorting
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
 CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 
--- Create a policy to allow public read access
+-- Reset old policies to keep this script idempotent
+DROP POLICY IF EXISTS "Allow public read access" ON blog_posts;
+DROP POLICY IF EXISTS "Allow authenticated insert" ON blog_posts;
+DROP POLICY IF EXISTS "Allow authenticated update" ON blog_posts;
+DROP POLICY IF EXISTS "Allow authenticated delete" ON blog_posts;
+DROP POLICY IF EXISTS "Allow authenticated read all" ON blog_posts;
+
+DROP POLICY IF EXISTS "Admin users can read own row" ON admin_users;
+
+-- admin_users policies
+CREATE POLICY "Admin users can read own row" ON admin_users
+    FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
+
+-- blog_posts policies
 CREATE POLICY "Allow public read access" ON blog_posts
-    FOR SELECT USING (published_at IS NOT NULL);
+    FOR SELECT
+    USING (published_at IS NOT NULL);
 
--- Create a policy to allow authenticated users to insert/update
--- (You'll need to adjust this based on your authentication setup)
-CREATE POLICY "Allow authenticated insert" ON blog_posts
-    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Allow admin read all" ON blog_posts
+    FOR SELECT TO authenticated
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM admin_users
+        WHERE admin_users.user_id = auth.uid()
+      )
+    );
 
-CREATE POLICY "Allow authenticated update" ON blog_posts
-    FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow admin insert" ON blog_posts
+    FOR INSERT TO authenticated
+    WITH CHECK (
+      EXISTS (
+        SELECT 1
+        FROM admin_users
+        WHERE admin_users.user_id = auth.uid()
+      )
+    );
 
-CREATE POLICY "Allow authenticated delete" ON blog_posts
-    FOR DELETE USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow admin update" ON blog_posts
+    FOR UPDATE TO authenticated
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM admin_users
+        WHERE admin_users.user_id = auth.uid()
+      )
+    )
+    WITH CHECK (
+      EXISTS (
+        SELECT 1
+        FROM admin_users
+        WHERE admin_users.user_id = auth.uid()
+      )
+    );
 
-CREATE POLICY "Allow authenticated read all" ON blog_posts
-    FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow admin delete" ON blog_posts
+    FOR DELETE TO authenticated
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM admin_users
+        WHERE admin_users.user_id = auth.uid()
+      )
+    );
 
--- Insert some sample data
+-- Insert sample posts
 INSERT INTO blog_posts (title, slug, content, excerpt, author, published_at, tags)
 VALUES
     (
@@ -101,4 +157,10 @@ npm install @supabase/supabase-js
         'Admin',
         NOW(),
         ARRAY['Next.js', 'Supabase', '教程']
-    );
+    )
+ON CONFLICT (slug) DO NOTHING;
+
+-- After creating your first Supabase auth user, register it as admin:
+-- INSERT INTO admin_users (user_id)
+-- VALUES ((SELECT id FROM auth.users WHERE email = 'your-admin-email@example.com'))
+-- ON CONFLICT (user_id) DO NOTHING;

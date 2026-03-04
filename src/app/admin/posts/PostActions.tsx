@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import type { BlogPost } from '@/lib/supabase'
+import { deletePostAction, togglePublishAction } from '@/app/admin/posts/actions'
 
 interface PostActionsProps {
   post: BlogPost
@@ -16,22 +16,16 @@ export default function PostActions({ post }: PostActionsProps) {
 
   const handleTogglePublish = async () => {
     setLoading(true)
-    const supabase = createBrowserSupabaseClient()
 
-    const { error } = await supabase
-      .from('blog_posts')
-      .update({
-        published_at: post.published_at ? null : new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', post.id)
-
-    if (error) {
-      alert('操作失败：' + error.message)
+    try {
+      await togglePublishAction(post.id, !post.published_at)
+      router.refresh()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '操作失败，请稍后重试'
+      alert('操作失败：' + message)
+      setLoading(false)
     }
-
-    setLoading(false)
-    router.refresh()
   }
 
   const handleDelete = async () => {
@@ -40,20 +34,15 @@ export default function PostActions({ post }: PostActionsProps) {
     }
 
     setLoading(true)
-    const supabase = createBrowserSupabaseClient()
-
-    const { error } = await supabase
-      .from('blog_posts')
-      .delete()
-      .eq('id', post.id)
-
-    if (error) {
-      alert('删除失败：' + error.message)
+    try {
+      await deletePostAction(post.id)
+      router.refresh()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '删除失败，请稍后重试'
+      alert('删除失败：' + message)
       setLoading(false)
-      return
     }
-
-    router.refresh()
   }
 
   return (

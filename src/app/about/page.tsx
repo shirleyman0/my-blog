@@ -56,8 +56,8 @@ export default function AboutPage() {
               如果你有任何问题或想法，欢迎通过以下方式联系我：
             </p>
             <ul className="list-disc list-inside text-gray-600 dark:text-gray-300 mt-4 space-y-2">
-              <li>GitHub: <a href="https://github.com" className="text-blue-600 hover:text-blue-700 dark:hover:text-blue-400">@username</a></li>
-              <li>Email: <a href="mailto:example@email.com" className="text-blue-600 hover:text-blue-700 dark:hover:text-blue-400">example@email.com</a></li>
+              <li>GitHub: 暂未公开</li>
+              <li>Email: 暂未公开</li>
             </ul>
           </div>
         </div>
