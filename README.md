@@ -1,6 +1,6 @@
 # My Blog
 
-基于 Next.js App Router + Supabase 的个人博客系统。
+基于 Next.js App Router + Supabase 的个人博客系统
 
 ## 技术栈
 
